@@ -60,10 +60,26 @@
     (clear-color 0 0 0 1)
     (clear :color-buffer-bit)))
 
+
+(defmethod paint ((obj disk) (tex texture) color)
+  (declare (type (unsigned-byte 8) color))
+  (with-slots ((x pos-x) (y pos-y) (r radius)) obj
+    (let ((r2 (* r r)))
+     (with-slots (data) tex
+       (destructuring-bind (h w) (array-dimensions data)
+	 (loop for i from (floor (- x r)) upto (ceiling (+ x r)) do
+	      (loop for j from (floor (- y r)) upto (ceiling (+ y r)) do
+		   (when (and (<= 0 i (1- w))
+			      (<= 0 j (1- h))
+			      (< (+ (expt (- i x) 2) 
+				    (expt (- j y) 2))
+				 r2))
+		     (setf (aref data j i) color)))))))))
+
 (let ((rot 0)
       (parm (make-instance 'window-params
 			   :pos-x 421 :pos-y 15
-			   :win-w 186 :win-h 200)))
+			   :win-w 184 :win-h 200)))
   (defun draw-frame ()
     (when (needs-update-p parm)
       (with-slots (pos-x pos-y win-w win-h 
@@ -73,12 +89,16 @@
 	(setf needs-update-p nil)))
     (setup-screen)
     (color 1 1 1)
-
-    (draw (make-instance 'texture
-			 :data (make-array (list 64 64)
-					   :element-type '(unsigned-byte 8)
-					   :initial-element 120)))
-    (draw (make-instance 'circle :radius 14 :pos-x 60 :pos-y 20))))
+    (with-slots (win-w win-h) parm
+      (let* ((circ (make-instance 'circle :radius 61 :pos-x 100.5 :pos-y 100.5))
+	     (disk (make-instance 'disk :radius 60 :pos-x 100 :pos-y 100))
+	     (data (make-array (list win-h win-w)
+			       :element-type '(unsigned-byte 8)
+			       :initial-element 120))
+	    (tex (make-instance 'texture :data data)))
+	(paint disk tex 200)
+	(draw tex)
+	(draw circ)))))
 
 
 
@@ -88,9 +108,10 @@
      (translate x y 0)
      (scale r r 1)
      (with-primitive :line-loop
-       (dotimes (i 17)
-	 (vertex (sin (* 2 pi (/ i 17)))
-		 (cos (* 2 pi (/ i 17)))))))))
+       (let ((n 300))
+	(dotimes (i n)
+	  (vertex (sin (* 2 pi (/ i n)))
+		  (cos (* 2 pi (/ i n))))))))))
 
 (defmethod draw ((obj disk))
   (with-slots ((x pos-x) (y pos-y) (r radius)) obj
