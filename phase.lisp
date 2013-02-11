@@ -171,7 +171,7 @@ this ray."
   (with-slots ((r radius) (cx pos-x) (cy pos-y)) circ
     (with-slots (x y) p
       (let* ((c (v cx cy))
-	     (l (v- c p)) ;; vector from point to center of circle
+	     (l (v- p c)) ;; vector from point to center of circle
 	     (rr2 (v. l l))
 	     (rr (sqrt rr2))
 	     (s (/ r (* 2 rr)))
@@ -181,7 +181,8 @@ this ray."
 	 (v+ c (v+ (s* (normalize l) ix)
 		   (s* (perpendicular l) iy)))
 	 (v+ c (v+ (s* (normalize l) ix)
-		   (s* (perpendicular l) (- iy)))))))))
+		   (s* (perpendicular l) (- iy))))
+	 rr)))))
 
 #+nil
 (tangent-touch (make-instance 'circle :radius 7. :pos-x 10. :pos-y 0.)
@@ -247,6 +248,10 @@ this ray."
       (draw (make-instance 'circle :radius r 
 			   :pos-x x :pos-y y)))))
 
+(defun next-number-divisible-by-n (n val)
+  (loop for i from val below (+ val n) do
+       (when (= 0 (mod i n))
+	 (return-from next-number-divisible-by-n i))))
 
 
 (let ((rot 0)
@@ -268,22 +273,37 @@ this ray."
       (setf rot 6.5))
     (when (< 72 rot)
       (setf rot 6.5))
-    (let ((r 8)
-	  (rout 8)
-	  (pos '((40 14)
+    (let ((r 30)
+	  (rout 80)
+	  (pos '((80 40)
 		 ;(80 14)
 		 ;(120 14)
 		 ))
-	  (off (list (list 40 (- 100 rot))
+	  (off (list (list 80 130)
 		     ;(list 120 (- 100 rot))
-		     (list 80 80))))
+		     ;(list 80 80)
+		     )))
      (with-slots (win-w win-h) parm
+       (let* ((n (next-number-divisible-by-n 
+		  4 (ceiling (* (- 1 (* .01 (random 10))) (sqrt 2) (max win-h win-w)))))
+	      (data (make-array (list n n)
+			       :element-type '(unsigned-byte 8)
+			       :initial-element 120))
+	      (tex (make-instance 'texture :data data)))
+	 (paint (make-instance 'disk :pos-x 100 :pos-y 100 :radius 70) 
+		tex 
+		200)
+	 (with-pushed-matrix
+	   (translate -40 100 0)
+	   (rotate -45 0 0 1)
+
+	  (draw tex)))
        (color 0 1 0) (draw-circles r pos)
        (color 1 0 0) (draw-circles rout off)
-       (let ((z 14)
+       (let ((z 40)
 	     (h0 120))
 	 (color 1 1 0) (draw-tangents z r pos rout off)
-	 (dolist (c pos)
+	 #+nil (dolist (c pos)
 	   (destructuring-bind (x y) c
 	    (handler-case
 		(multiple-value-bind (u v)
@@ -291,7 +311,7 @@ this ray."
 					      :start (v 0.0 z))
 			       (make-instance 'circle :radius r
 					      :pos-x x :pos-y y))
-		  (loop with n = 20 for i upto n do
+		  (loop with n = 17 for i upto n do
 		       (let ((p (v+ u (s* (v- v u) (/ i n)))))
 			 (dolist (c off)
 			   (destructuring-bind (x y) c
@@ -300,7 +320,7 @@ this ray."
 				  (make-instance 'circle :radius rout
 						 :pos-x x :pos-y y)
 				  p)
-			       (loop with nj = 5 for j upto nj do
+			       (loop with nj = 17 for j upto nj do
 				    (let ((q (v+ lo (s* (v- lo ro) (/ j nj)))))
 				      (draw (v (x p) 
 					       (+ h0 (* .4 180 (/ pi) (angle q p))))))))))))
@@ -332,12 +352,17 @@ this ray."
 	       (let ((p (v+ left (s* (v- right left) (/ i n)))))
 		(dolist (c off)
 		  (destructuring-bind (x y) c
-		    (dolist (q (multiple-value-list
-				(tangent-touch
-				 (make-instance 'circle :radius rout
-						:pos-x x :pos-y y)
-				 p)))
-		      (draw (make-line p q))))))))
+		    (multiple-value-bind (a b r)
+			(tangent-touch
+			 (make-instance 'circle :radius rout
+					:pos-x x :pos-y y)
+			 p)
+		      (draw (make-instance 'circle 
+					   :radius r
+					   :pos-x (x p)
+					   :pos-y (y p)))
+		      (dolist (q (list a b))
+			(draw (make-line p q)))))))))
 	 (no-solution ())
 	 (one-solution ())))))
 
@@ -360,8 +385,10 @@ this ray."
    (with-pushed-matrix 
      (translate x y 0)
      (scale r r 1)
+     (with-primitive :points
+       (vertex 0 0))
      (with-primitive :line-loop
-       (let ((n 17))
+       (let ((n 80))
 	(dotimes (i n)
 	  (vertex (sin (* 2 pi (/ i n)))
 		  (cos (* 2 pi (/ i n))))))))))
