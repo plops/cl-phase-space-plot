@@ -190,16 +190,18 @@ this ray."
 
 (defclass texture ()
   ((data :accessor data :initarg :data)
+   (filter :accessor filter :initarg :filter :initform :nearest)
    (tex-format :accessor tex-format :initarg :tex-format :initform :luminance)))
 
 (defmethod draw ((tex texture))
-  (with-slots (data tex-format) tex
+  (with-slots (data tex-format filter) tex
     (destructuring-bind (h w) (array-dimensions data)
 	(let ((obj (first (gen-textures 1))))
 	  (bind-texture :texture-2d obj)
 	  ;;(pixel-store-i gl:+unpack-alignment+ 1)
-	  (tex-parameter :texture-2d :texture-min-filter :nearest)
-	  (tex-parameter :texture-2d :texture-mag-filter :nearest)
+	  
+	  (tex-parameter :texture-2d :texture-min-filter filter)
+	  (tex-parameter :texture-2d :texture-mag-filter filter)
 	  (progn
 	    (bind-texture :texture-2d obj)
 	    (tex-image-2d :texture-2d 0 :rgba w h 0
@@ -226,6 +228,20 @@ this ray."
     (clear-color 0 0 0 1)
     (clear :color-buffer-bit)))
 
+
+#+nil
+(defmethod paint ((obj line) (tex texture) color)
+  (declare (type (unsigned-byte 8) color))
+  (with-slots (data) tex
+    (destructuring-bind (h w) (array-dimensions (d))
+     (with-slots (u v) obj
+       (with-slots ((ux x) (uy y)) u
+	 (with-slots ((vx x) (vy y)) v
+	   (let ((dx (- ux vx))
+		 (dy (- uy vy)))
+	     (if (< (abs dx) (abs dy))
+		 (loop for j from (min vy uy) upto (max vy uy) do
+		      (setf (aref data j (- j ))))))))))))
 
 (defmethod paint ((obj disk) (tex texture) color)
   (declare (type (unsigned-byte 8) color))
@@ -257,7 +273,7 @@ this ray."
 (let ((rot 0)
       (parm (make-instance 'window-params
 			   :pos-x 421 :pos-y 15
-			   :win-w 184 :win-h 200)))
+			   :win-w 184 :win-h 400)))
   (defun draw-frame ()
     (when (needs-update-p parm)
       (with-slots (pos-x pos-y win-w win-h 
@@ -268,7 +284,7 @@ this ray."
     (setup-screen)
     (color 1 1 1)
 
-    (incf rot 2)
+    (incf rot .5)
     (when (< rot 6)
       (setf rot 6.5))
     (when (< 72 rot)
@@ -285,18 +301,23 @@ this ray."
 		     )))
      (with-slots (win-w win-h) parm
        (let* ((n (next-number-divisible-by-n 
-		  4 (ceiling (* (- 1 (* .01 (random 10))) (sqrt 2) (max win-h win-w)))))
+		  4 (ceiling (* (sqrt 2) (max win-h win-w)))))
 	      (data (make-array (list n n)
 			       :element-type '(unsigned-byte 8)
-			       :initial-element 120))
-	      (tex (make-instance 'texture :data data)))
+			       :initial-element 0))
+	      (tex (make-instance 'texture :data data :filter :nearest)))
 	 (paint (make-instance 'disk :pos-x 100 :pos-y 100 :radius 70) 
 		tex 
 		200)
+	 (loop for i below n by 10 do
+	   (setf (aref data (floor n 2) i) 255
+		 (aref data i (floor n 2)) 255))
 	 (with-pushed-matrix
-	   (translate -40 100 0)
+	   (scale .5 1 1)
+	   (translate (+ .5 (floor win-w 2))
+		      (+ .5 (floor win-h 2)) 0)
 	   (rotate -45 0 0 1)
-
+	   (translate (- (floor n 2)) (- (floor n 2)) 0)
 	  (draw tex)))
        (color 0 1 0) (draw-circles r pos)
        (color 1 0 0) (draw-circles rout off)
