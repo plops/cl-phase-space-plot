@@ -97,6 +97,11 @@ this ray."
 (defmethod perpendicular ((v vec2))
   (let ((q (normalize v)))
     (v (- (y q)) (x q))))
+
+(defmethod angle ((u vec2) (v vec2))
+  (let ((l (v- u v)))
+    (atan (y l) (x l))))
+
 #+nil
 (let ((arg (* pi (/ 180) 45)))
  (let ((v (let () 
@@ -106,7 +111,13 @@ this ray."
 	 (s* v 
 	     (norm v))
 	 (normalize v)
-	 (perpendicular v))))
+	 (perpendicular v)
+	 (angle (normalize v)
+		(perpendicular v)))))
+
+
+
+
 
 (defmethod s* ((v vec2) s)
   (make-instance 'vec2
@@ -128,22 +139,22 @@ this ray."
 	    (l (v- center start))
 	    (c (- (v. l l) (* radius radius)))
 	    (b (* -2d0 (v. l direction))))
-       (handler-case (multiple-value-bind (x1 x2) (quadratic-roots 1d0 b c)
-		       (if (< x1 x2)
-			(values
-			 (collapse ray x1)
-			 (collapse ray x2))
-			(values
-			 (collapse ray x2)
-			 (collapse ray x1))))
-	 (one-solution () nil)
-	 (no-solution () nil))))))
+       (multiple-value-bind (x1 x2) (quadratic-roots 1d0 b c)
+	 (if (< x1 x2)
+	     (values
+	      (collapse ray x1)
+	      (collapse ray x2))
+	     (values
+	      (collapse ray x2)
+	      (collapse ray x1))))))))
 
 
 #+nil
-(intersect (make-instance 'ray :direction (v 1.0)
-			  :start (v 0.0 0.0))
-	   (make-instance 'circle :radius 1. :pos-x 2.0 :pos-y 0.0))
+(multiple-value-bind (a b)
+ (intersect (make-instance 'ray :direction (v 1.0)
+			   :start (v 0.0 0.0))
+	    (make-instance 'circle :radius 1. :pos-x 2.0 :pos-y 0.0))
+  (list a b))
 
 
 (defmethod tangent-touch ((circ circle) (p vec2))
@@ -230,6 +241,12 @@ this ray."
 				 r2))
 		     (setf (aref data j i) color)))))))))
 
+(defun draw-circles (r pos)
+  (dolist (p pos)
+    (destructuring-bind (x y) p
+      (draw (make-instance 'circle :radius r 
+			   :pos-x x :pos-y y)))))
+
 (let ((rot 0)
       (parm (make-instance 'window-params
 			   :pos-x 421 :pos-y 15
@@ -244,56 +261,63 @@ this ray."
     (setup-screen)
     (color 1 1 1)
 
-    (let ((r 6)
-	  (pos '((40 14) (80 14) (90 14)))
-	  (off '((20 100))))
+    (let ((r 8)
+	  (pos '((40 14)
+		 ;(80 14)
+		 (120 14)
+		 ))
+	  (off '((20 100)
+		 ;(90 100)
+		 )))
      (with-slots (win-w win-h) parm
-       (let* ((data (make-array (list win-h win-w)
-				:element-type '(unsigned-byte 8)
-				:initial-element 80))
-	      (tex (make-instance 'texture :data data)))
-	 (dolist (p (append pos off))
-	   (destructuring-bind (x y) p
-	     (paint (make-instance 'disk :radius r :pos-x x :pos-y y)
-		    tex 164)))
-	 (let ((x0 40) (y0 60))
-	   (loop for j from -30 upto 30 do
-	    (setf (aref (data tex) (+ y0 j) x0)
-		  255))
-	   (dotimes (i 50)
-	     (setf (aref (data tex) y0 (+ x0 i))
-		   255)))
-	 (draw tex)
-	 (dolist (p pos)
-	   (destructuring-bind (x y) p
-	     (color .2 1 0)
-	     (draw (make-instance 'circle :radius r 
-				  :pos-x x :pos-y y))))
-	 (dolist (p off)
-	   (destructuring-bind (x y) p
-	     (color 1 .3 0)
-	     (draw (make-instance 'circle :radius r 
-				  :pos-x x :pos-y y))))
-	 (color 1 1 .3)
-	 (point-size 2)
-
+       (color 0 1 0) (draw-circles r pos)
+       (color 1 0 0) (draw-circles r off)
+       
+       
+       (let ((z 14))
+	 (color 1 1 0) (draw-tangents z r pos off)
 	 (dolist (c pos)
-	   (destructuring-bind (x y) c
-	     (dolist (p (multiple-value-list
-			 (intersect (make-instance 'ray :direction (v 1.0)
-						   :start (v 0.0 14.0))
-				    (make-instance 'circle :radius r
-						   :pos-x x :pos-y y))))
-	       (draw p)
-	       (dolist (c off)
-		 (destructuring-bind (x y) c
-		  (dolist (q (multiple-value-list
-			      (tangent-touch
+	  (destructuring-bind (x y) c
+	    (handler-case
+		(multiple-value-bind (u v)
+		    (intersect (make-instance 'ray :direction (v 1.0)
+					      :start (v 0.0 z))
 			       (make-instance 'circle :radius r
-					      :pos-x x :pos-y y)
-			       p)))
-		    (draw (make-line p q)))))))))))))
+					      :pos-x x :pos-y y))
+		  (dolist (p (list u v))
+		   (dolist (c off)
+		     (destructuring-bind (x y) c
+		       (dolist (q (multiple-value-list
+				   (tangent-touch
+				    (make-instance 'circle :radius r
+						   :pos-x x :pos-y y)
+				    p)))
+			 (draw (v (x p) 
+				  (+ 150 (* .3 180 (/ pi) (angle q p)))))))))
 
+		  (color 1 1 1)
+	     
+		  (draw (make-line (v+ (v 0. 150.) u)
+				   (v+ (v 0. 150.) v))))
+	      (no-solution ())
+	      (one-solution ())))))))))
+
+(defun draw-tangents (z r pos off) 
+  (dolist (c pos)
+    (destructuring-bind (x y) c
+      (dolist (p (multiple-value-list
+		  (intersect (make-instance 'ray :direction (v 1.0)
+					    :start (v 0.0 z))
+			     (make-instance 'circle :radius r
+					    :pos-x x :pos-y y))))
+	(dolist (c off)
+	  (destructuring-bind (x y) c
+	    (dolist (q (multiple-value-list
+			(tangent-touch
+			 (make-instance 'circle :radius r
+					:pos-x x :pos-y y)
+			 p)))
+	      (draw (make-line p q)))))))))
 
 (defmethod make-line ((u vec2) (v vec2))
   (make-instance 'line :target v :start u))
