@@ -47,20 +47,6 @@ this ray."
 (define-condition one-solution () ())
 (define-condition no-solution () ())
 
-(defun unstable-quadratic-roots (a b c)
-  "This is just to verify the numerically stable version."
-  (values
-   (/ (* 2 c)
-      (+ (- b) (sqrt (- (* b b) (* 4 a c)))))
-   (/ (* 2 c)
-      (- (- b) (sqrt (- (* b b) (* 4 a c)))))))
-
-#+nil
-(unstable-quadratic-roots 1.0 0.0 -4.0)
-#+nil
-(quadratic-roots 1.0 0.0 -4.0)
-
-
 (defun quadratic-roots (a b c)
   (declare (double-float a b c)
 	   (values double-float double-float &optional))
@@ -98,6 +84,9 @@ this ray."
 (defmethod v. ((u vec2) (v vec2))
   (+ (* (x u) (x v))
      (* (y u) (y v))))
+
+(defmethod norm ((v vec2))
+  (sqrt (v. v v)))
 (defmethod s* ((v vec2) s)
   (make-instance 'vec2
 		 :x (* s (x v))
@@ -111,6 +100,7 @@ this ray."
   ;; alpha^2 + l a alpha + l^2-r^2 = 0
   ;; alpha^2 +  b  alpha +    c    = 0 
   ;; the raydirection should have length 1, solve the quadratic equation
+  ;; return the closest point first
   (with-slots (start direction) ray
     (with-slots (radius pos-x pos-y) circ
      (let* ((center (v pos-x pos-y))
@@ -118,25 +108,50 @@ this ray."
 	    (c (- (v. l l) (* radius radius)))
 	    (b (* -2d0 (v. l direction))))
        (handler-case (multiple-value-bind (x1 x2) (quadratic-roots 1d0 b c)
-		       (values
-			x1 x2
-			(collapse ray x1)
-			(collapse ray x2)))
+		       (if (< x1 x2)
+			(values
+			 (collapse ray x1)
+			 (collapse ray x2))
+			(values
+			 (collapse ray x2)
+			 (collapse ray x1))))
 	 (one-solution () nil)
 	 (no-solution () nil))))))
 
+
 #+nil
 (intersect (make-instance 'ray :direction (v 1.0)
-			  :start (v 0.0 1.0))
+			  :start (v 0.0 0.0))
 	   (make-instance 'circle :radius 1. :pos-x 2.0 :pos-y 0.0))
 
 
-(defmethod intersect ((c circle) (d circle))
-  (with-slots ((r radius) (x pos-x) (y pos-y)) c
-    (with-slots ((rr radius) (xx pos-x) (yy pos-y)) d
-      )))
-;; rayt/simple-ray has the analytical solution
+(defmethod tangent-touch ((circ circle) (p vec2))
+  ;; find the two points where the tangents that intersect in point p
+  ;; touch the circle c
+  ;; construct a second circle with radius R around p
+  ;; intersect two circles, one with radius R and another with radius r
+  ;; the small circle sits on the origin, the big circle is on x=R
+  ;; (%i3) solve([(x-RR)^2+y^2=R^2,x^2+y^2=r^2],[x,y]);
+  ;;              2                   2    2          2                 2    2
+  ;;             r          r sqrt(4 R  - r )        r        r sqrt(4 R  - r )
+  ;; (%o3) [[x = ---, y = - -----------------], [x = ---, y = -----------------]]
+  ;;             2 R               2 R               2 R             2 R
+  (with-slots ((r radius) (cx pos-x) (cy pos-y)) circ
+    (with-slots (x y) p
+      (let* ((c (v cx cy))
+	     (l (v- c p)) ;; vector from point to center of circle
+	     (rr2 (v. l l))
+	     (rr (sqrt rr2))
+	     (s (/ r (* 2 rr)))
+	     (ix (* s r))
+	     (iy (* s (sqrt (- (* 4 rr2) (* r r))))))
+	(values 
+	 (v+ c (v ix iy))
+	 (v+ c (v ix (- iy))))))))
 
+#+nil
+(tangent-touch (make-instance 'circle :radius 7. :pos-x 10. :pos-y 0.)
+	       (v 0 0))
 
 (defclass texture ()
   ((data :accessor data :initarg :data)
