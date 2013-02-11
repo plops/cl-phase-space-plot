@@ -261,21 +261,29 @@ this ray."
     (setup-screen)
     (color 1 1 1)
 
+    (incf rot 2)
+    (when (< rot 6)
+      (setf rot 6.5))
+    (when (< 40 rot)
+      (setf rot 6.5))
     (let ((r 8)
+	  (rout 7)
 	  (pos '((40 14)
-		 ;(80 14)
+		 (80 14)
 		 (120 14)
 		 ))
-	  (off '((20 100)
-		 ;(90 100)
-		 )))
+	  (off (list (list 20 (- 100 rot))
+		     (list 120 (- 100 rot)
+		      )
+		     )))
      (with-slots (win-w win-h) parm
        (color 0 1 0) (draw-circles r pos)
-       (color 1 0 0) (draw-circles r off)
+       (color 1 0 0) (draw-circles rout off)
        
        
-       (let ((z 14))
-	 (color 1 1 0) (draw-tangents z r pos off)
+       (let ((z 14)
+	     (h0 120))
+	 (color 1 1 0) (draw-tangents z r pos rout off)
 	 (dolist (c pos)
 	  (destructuring-bind (x y) c
 	    (handler-case
@@ -284,40 +292,52 @@ this ray."
 					      :start (v 0.0 z))
 			       (make-instance 'circle :radius r
 					      :pos-x x :pos-y y))
-		  (dolist (p (list u v))
-		   (dolist (c off)
-		     (destructuring-bind (x y) c
-		       (dolist (q (multiple-value-list
-				   (tangent-touch
-				    (make-instance 'circle :radius r
-						   :pos-x x :pos-y y)
-				    p)))
-			 (draw (v (x p) 
-				  (+ 150 (* .3 180 (/ pi) (angle q p)))))))))
-
+		  (loop with n = 20 for i upto n do
+		       (let ((p (v+ u (s* (v- v u) (/ i n)))))
+			 (dolist (c off)
+			   (destructuring-bind (x y) c
+			     (dolist (q (multiple-value-list
+					 (tangent-touch
+					  (make-instance 'circle :radius rout
+							 :pos-x x :pos-y y)
+					  p)))
+			   (draw (v (x p) 
+				    (+ h0 (* .4 180 (/ pi) (angle q p))))))))))
+		  
 		  (color 1 1 1)
 	     
-		  (draw (make-line (v+ (v 0. 150.) u)
-				   (v+ (v 0. 150.) v))))
+		  (draw (make-line (v 0 h0)
+				   (v win-w h0)))
+		  (let ((h (+ h0 (* .4 90))))
+		   (draw (make-line (v 0 h)
+				    (v win-w h))))
+		  (let ((h (+ h0 (* .4 180))))
+		   (draw (make-line (v 0 h)
+				    (v win-w h)))))
 	      (no-solution ())
 	      (one-solution ())))))))))
 
-(defun draw-tangents (z r pos off) 
+(defun draw-tangents (z r pos rout off) 
   (dolist (c pos)
     (destructuring-bind (x y) c
-      (dolist (p (multiple-value-list
-		  (intersect (make-instance 'ray :direction (v 1.0)
-					    :start (v 0.0 z))
-			     (make-instance 'circle :radius r
-					    :pos-x x :pos-y y))))
-	(dolist (c off)
-	  (destructuring-bind (x y) c
-	    (dolist (q (multiple-value-list
-			(tangent-touch
-			 (make-instance 'circle :radius r
-					:pos-x x :pos-y y)
-			 p)))
-	      (draw (make-line p q)))))))))
+       (handler-case 
+	   (multiple-value-bind (left right)
+	       (intersect (make-instance 'ray :direction (v 1.0)
+					 :start (v 0.0 z))
+			  (make-instance 'circle :radius r
+					 :pos-x x :pos-y y))
+	     (loop with n = 3 for i upto n do
+	       (let ((p (v+ left (s* (v- right left) (/ i n)))))
+		(dolist (c off)
+		  (destructuring-bind (x y) c
+		    (dolist (q (multiple-value-list
+				(tangent-touch
+				 (make-instance 'circle :radius rout
+						:pos-x x :pos-y y)
+				 p)))
+		      (draw (make-line p q))))))))
+	 (no-solution ())
+	 (one-solution ())))))
 
 (defmethod make-line ((u vec2) (v vec2))
   (make-instance 'line :target v :start u))
