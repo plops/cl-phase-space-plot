@@ -30,6 +30,9 @@
    (y :accessor y :initarg :y :type number)))
 (defmethod print-object ((v vec2) stream)
   (format stream "<v ~,1f ~,1f>" (x v) (y v)))
+(defclass line ()
+  ((start :accessor start :initarg :start :type vec2)
+   (target :accessor target :initarg :target :type vec2)))
 (defclass ray ()
   ((start :accessor start :initarg :start :type vec2)
    (direction :accessor direction :initarg :direction :type vec2)))
@@ -239,32 +242,41 @@ this ray."
 		  255))
 	   (dotimes (i 50)
 	     (setf (aref (data tex) y0 (+ x0 i))
-		   255))
-	   (dotimes (i 50)
-	     (loop for angle from -90 upto 90 do
-		  (setf (aref (data tex)
-			      (+ y0 (floor angle 3))
-			      (+ x0 i))
-			(intersect-p i angle
-				     (loop for e in off collect
-					  (destructuring-bind (x y) e
-					    (make-instance 'circle
-							   :radius r
-							   :pos-x x
-							   :pos-y y))))))))
+		   255)))
 	 (draw tex)
 	 (dolist (p pos)
 	   (destructuring-bind (x y) p
 	     (color .2 1 0)
 	     (draw (make-instance 'circle :radius r 
-				  :pos-x (+ x .5) :pos-y (+ y .5)))))
+				  :pos-x x :pos-y y))))
 	 (dolist (p off)
 	   (destructuring-bind (x y) p
 	     (color 1 .3 0)
 	     (draw (make-instance 'circle :radius r 
-				  :pos-x (+ x .5) :pos-y (+ y .5)))))
-	 )))))
+				  :pos-x x :pos-y y))))
+	 (color 1 1 .3)
+	 (point-size 2)
+	 (dolist (c pos)
+	   (destructuring-bind (x y) c
+	    (dolist (p (multiple-value-list
+			(intersect (make-instance 'ray :direction (v 1.0)
+						  :start (v 0.0 14.0))
+				   (make-instance 'circle :radius r
+						  :pos-x x :pos-y y))))
+	      (draw p)))))))))
 
+
+
+
+(defmethod draw ((p vec2))
+  (with-primitive :points
+     (vertex (x p) (y p))))
+
+(defmethod draw ((l line))
+  (with-slots ((u start) (v target)) l
+    (with-primitive :line
+      (vertex (x u) (y u))
+     (vertex (x v) (y v)))))
 
 (defmethod draw ((obj circle))
   (with-slots ((x pos-x) (y pos-y) (r radius)) obj
@@ -292,7 +304,7 @@ this ray."
 #+nil
 (glfw:do-window (:title "display grid on projector" 
 			:width 120 :height 120)
-    ((glfw:swap-interval 1))
+    ((glfw:swap-interval 10))
   (when (eql (glfw:get-key glfw:+key-esc+) glfw:+press+)
     (return-from glfw::do-open-window))
   (draw-frame))
