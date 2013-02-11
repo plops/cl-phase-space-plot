@@ -264,16 +264,15 @@ this ray."
       (draw (make-instance 'circle :radius r 
 			   :pos-x x :pos-y y)))))
 
-(defun next-number-divisible-by-n (n val)
+(defun closest-number-divisible-by-n (n val)
   (loop for i from val below (+ val n) do
        (when (= 0 (mod i n))
-	 (return-from next-number-divisible-by-n i))))
-
+	 (return-from closest-number-divisible-by-n i))))
 
 (let ((rot 0)
       (parm (make-instance 'window-params
 			   :pos-x 421 :pos-y 15
-			   :win-w 184 :win-h 400)))
+			   :win-w 184 :win-h 646)))
   (defun draw-frame ()
     (when (needs-update-p parm)
       (with-slots (pos-x pos-y win-w win-h 
@@ -300,23 +299,25 @@ this ray."
 		     ;(list 80 80)
 		     )))
      (with-slots (win-w win-h) parm
-       (let* ((n (next-number-divisible-by-n 
-		  4 (ceiling (* (sqrt 2) (max win-h win-w)))))
+       (let* ((n (closest-number-divisible-by-n 
+		  4 256 #+nil (ceiling (* (sqrt 2) (max win-h win-w)))))
 	      (data (make-array (list n n)
 			       :element-type '(unsigned-byte 8)
 			       :initial-element 0))
 	      (tex (make-instance 'texture :data data :filter :nearest)))
-	 (paint (make-instance 'disk :pos-x 100 :pos-y 100 :radius 70) 
+	 (paint (make-instance 'disk :pos-x 100 :pos-y 100 :radius 20) 
 		tex 
 		200)
-	 (loop for i below n by 10 do
+	 (loop for i below n by 3 do
 	   (setf (aref data (floor n 2) i) 255
 		 (aref data i (floor n 2)) 255))
 	 (with-pushed-matrix
-	   (scale .5 1 1)
-	   (translate (+ .5 (floor win-w 2))
-		      (+ .5 (floor win-h 2)) 0)
-	   (rotate -45 0 0 1)
+;	   (scale 1 1 1)
+	 ;  (translate .0 .6 0)
+;	   (translate (* .01 (random 99)) (* .01 (random 99)) 0)
+	   (translate (floor win-w 2)
+		      (floor win-h 4) 0)
+	   (rotate 0 0 0 1)
 	   (translate (- (floor n 2)) (- (floor n 2)) 0)
 	  (draw tex)))
        (color 0 1 0) (draw-circles r pos)
