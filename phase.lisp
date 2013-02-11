@@ -90,6 +90,24 @@ this ray."
 
 (defmethod norm ((v vec2))
   (sqrt (v. v v)))
+
+(defmethod normalize ((v vec2))
+  (s* v (/ (norm v))))
+
+(defmethod perpendicular ((v vec2))
+  (let ((q (normalize v)))
+    (v (- (y q)) (x q))))
+#+nil
+(let ((arg (* pi (/ 180) 45)))
+ (let ((v (let () 
+	    (v (cos arg) (sin arg)))))
+   (list (list (cos arg) (sin arg))
+	 v
+	 (s* v 
+	     (norm v))
+	 (normalize v)
+	 (perpendicular v))))
+
 (defmethod s* ((v vec2) s)
   (make-instance 'vec2
 		 :x (* s (x v))
@@ -149,8 +167,10 @@ this ray."
 	     (ix (* s r))
 	     (iy (* s (sqrt (- (* 4 rr2) (* r r))))))
 	(values 
-	 (v+ c (v ix iy))
-	 (v+ c (v ix (- iy))))))))
+	 (v+ c (v+ (s* (normalize l) ix)
+		   (s* (perpendicular l) iy)))
+	 (v+ c (v+ (s* (normalize l) ix)
+		   (s* (perpendicular l) (- iy)))))))))
 
 #+nil
 (tangent-touch (make-instance 'circle :radius 7. :pos-x 10. :pos-y 0.)
@@ -256,16 +276,27 @@ this ray."
 				  :pos-x x :pos-y y))))
 	 (color 1 1 .3)
 	 (point-size 2)
+
 	 (dolist (c pos)
 	   (destructuring-bind (x y) c
-	    (dolist (p (multiple-value-list
-			(intersect (make-instance 'ray :direction (v 1.0)
-						  :start (v 0.0 14.0))
-				   (make-instance 'circle :radius r
-						  :pos-x x :pos-y y))))
-	      (draw p)))))))))
+	     (dolist (p (multiple-value-list
+			 (intersect (make-instance 'ray :direction (v 1.0)
+						   :start (v 0.0 14.0))
+				    (make-instance 'circle :radius r
+						   :pos-x x :pos-y y))))
+	       (draw p)
+	       (dolist (c off)
+		 (destructuring-bind (x y) c
+		  (dolist (q (multiple-value-list
+			      (tangent-touch
+			       (make-instance 'circle :radius r
+					      :pos-x x :pos-y y)
+			       p)))
+		    (draw (make-line p q)))))))))))))
 
 
+(defmethod make-line ((u vec2) (v vec2))
+  (make-instance 'line :target v :start u))
 
 
 (defmethod draw ((p vec2))
@@ -274,9 +305,9 @@ this ray."
 
 (defmethod draw ((l line))
   (with-slots ((u start) (v target)) l
-    (with-primitive :line
+    (with-primitive :lines
       (vertex (x u) (y u))
-     (vertex (x v) (y v)))))
+      (vertex (x v) (y v)))))
 
 (defmethod draw ((obj circle))
   (with-slots ((x pos-x) (y pos-y) (r radius)) obj
