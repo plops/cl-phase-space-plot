@@ -21,18 +21,31 @@
 (defclass circle ()
   ((pos-x :accessor pos-x :initarg :pos-x)
    (pos-y :accessor pos-y :initarg :pos-y)
+   (pos-z :accessor pos-z :initarg :pos-z)
    (radius :accessor radius :initarg :radius)))
 
 (defclass disk (circle) ())
 
+(defclass sphere ()
+  ((center :accessor center :initarg :center :type vec)
+   (radius :accessor radius :initarg :radius)))
+
 (defclass vec2 ()
   ((x :accessor x :initarg :x :type number)
    (y :accessor y :initarg :y :type number)))
+
+(defclass vec (vec2)
+  ((z :accessor z :initarg :z :type number)))
 (defmethod print-object ((v vec2) stream)
   (format stream "<v ~,1f ~,1f>" (x v) (y v)))
-(defclass line ()
+(defmethod print-object ((v vec) stream)
+  (format stream "<v ~,1f ~,1f ~,1f>" (x v) (y v) (z v)))
+(defclass line2 ()
   ((start :accessor start :initarg :start :type vec2)
    (target :accessor target :initarg :target :type vec2)))
+(defclass line ()
+  ((start :accessor start :initarg :start :type vec)
+   (target :accessor target :initarg :target :type vec)))
 (defclass ray ()
   ((start :accessor start :initarg :start :type vec2)
    (direction :accessor direction :initarg :direction :type vec2)))
@@ -73,57 +86,82 @@ this ray."
 
 
 
-(defun v (&optional (x 0.0) (y 0.0))
+(defun v (&optional (x 0.0) (y 0.0) (z 0.0))
+  (make-instance 'vec :x x :y y :z z))
+
+(defun v2 (&optional (x 0.0) (y 0.0))
   (make-instance 'vec2 :x x :y y))
 
+(defmethod v+ ((u vec) (v vec))
+  (v (+ (x u) (x v))
+     (+ (y u) (y v))
+     (+ (z u) (z v))))
+(defmethod v- ((u vec) (v vec))
+  (v (- (x u) (x v))
+     (- (y u) (y v))
+     (- (z u) (z v))))
+(defmethod v. ((u vec) (v vec))
+  (+ (* (x u) (x v))
+     (* (y u) (y v))
+     (* (z u) (z v))))
+
+(defmethod v^ ((u vec) (v vec))
+  "cross product"
+  (let ((a (x u)) (b (y u)) (c (z u))
+	(x (x v)) (y (y v)) (z (z v)))
+    (v (- (* b z) (* c y))
+       (- (* c x) (* a z))
+       (- (* a y) (* b x)))))
+#+nil
+(v^ (v 1 0 0)
+    (v 0 1 0))
+
 (defmethod v+ ((u vec2) (v vec2))
-  (make-instance 'vec2
-		 :x (+ (x u) (x v))
-		 :y (+ (y u) (y v))))
+  (v2 (+ (x u) (x v))
+      (+ (y u) (y v))))
 (defmethod v- ((u vec2) (v vec2))
-  (make-instance 'vec2
-		 :x (- (x u) (x v))
-		 :y (- (y u) (y v))))
+  (v2 (- (x u) (x v))
+      (- (y u) (y v))))
 (defmethod v. ((u vec2) (v vec2))
   (+ (* (x u) (x v))
      (* (y u) (y v))))
 
 (defmethod norm ((v vec2))
   (sqrt (v. v v)))
+(defmethod norm ((v vec))
+  (sqrt (v. v v)))
 
 (defmethod normalize ((v vec2))
+  (s* v (/ (norm v))))
+(defmethod normalize ((v vec))
   (s* v (/ (norm v))))
 
 (defmethod perpendicular ((v vec2))
   (let ((q (normalize v)))
     (v (- (y q)) (x q))))
 
+(defmethod perpendicular ((vec vec))
+  (let* ((x (normalize vec))
+	 (q (if (< (z x) (* 2/3 (norm x)))
+		(v 0.0 0.0 1.0)
+		(v 0.0 1.0 0.0))))
+    (v^ x q)))
+
+#+nil
+(perpendicular (v 1 1 0))
+
 (defmethod angle ((u vec2) (v vec2))
   (let ((l (v- u v)))
     (atan (y l) (x l))))
 
-#+nil
-(let ((arg (* pi (/ 180) 45)))
- (let ((v (let () 
-	    (v (cos arg) (sin arg)))))
-   (list (list (cos arg) (sin arg))
-	 v
-	 (s* v 
-	     (norm v))
-	 (normalize v)
-	 (perpendicular v)
-	 (angle (normalize v)
-		(perpendicular v)))))
-
-
-
-
-
 (defmethod s* ((v vec2) s)
-  (make-instance 'vec2
-		 :x (* s (x v))
-		 :y (* s (y v))))
+  (v2 (* s (x v))
+      (* s (y v))))
 
+(defmethod s* ((v vec) s)
+  (v (* s (x v))
+     (* s (y v))
+     (* s (z v))))
 
 (defmethod intersect ((ray ray) (circ circle))
   ;; (c-x)^2=r^2 defines the sphere, substitute x with the rays p+alpha a,
@@ -148,13 +186,20 @@ this ray."
 	      (collapse ray x2)
 	      (collapse ray x1))))))))
 
-
-#+nil
-(multiple-value-bind (a b)
- (intersect (make-instance 'ray :direction (v 1.0)
-			   :start (v 0.0 0.0))
-	    (make-instance 'circle :radius 1. :pos-x 2.0 :pos-y 0.0))
-  (list a b))
+(defmethod intersect ((ray ray) (sphere sphere))
+  (with-slots (start direction) ray
+    (with-slots (center radius) sphere
+     (let* ((l (v- center start))
+	    (c (- (v. l l) (* radius radius)))
+	    (b (* -2d0 (v. l direction))))
+       (multiple-value-bind (x1 x2) (quadratic-roots 1d0 b c)
+	 (if (< x1 x2)
+	     (values
+	      (collapse ray x1)
+	      (collapse ray x2))
+	     (values
+	      (collapse ray x2)
+	      (collapse ray x1))))))))
 
 
 (defmethod tangent-touch ((circ circle) (p vec2))
@@ -172,7 +217,23 @@ this ray."
     (with-slots (x y) p
       (let* ((c (v cx cy))
 	     (l (s* (v- p c) .5)) ;; half of vector from point to
-				  ;; center of circle
+				  ;; center of circle (theorem of thales ?)
+	     (rr2 (v. l l))
+	     (rr (sqrt rr2))
+	     (s (/ r (* 2 rr)))
+	     (ix (* s r))
+	     (iy (* s (sqrt (- (* 4 rr2) (* r r))))))
+	(values 
+	 (v+ c (v+ (s* (normalize l) ix)
+		   (s* (perpendicular l) iy)))
+	 (v+ c (v+ (s* (normalize l) ix)
+		   (s* (perpendicular l) (- iy))))
+	 (v+ c (s* (normalize l) ix)))))))
+
+(defmethod tangent-touch ((sphere sphere) (p vec))
+  (with-slots ((r radius) (c center)) sphere
+    (with-slots (x y) p
+      (let* ((l (s* (v- p c) .5))
 	     (rr2 (v. l l))
 	     (rr (sqrt rr2))
 	     (s (/ r (* 2 rr)))
@@ -289,7 +350,7 @@ this ray."
     (when (< 79 rot)
       (setf rot 6.5))
     (let ((r 9)
-	  (rout 21)
+	  (rout 9)
 	  (pos '((20 14)
 		 (80 14)
 		 (120 14)
