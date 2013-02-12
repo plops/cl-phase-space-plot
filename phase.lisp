@@ -171,7 +171,8 @@ this ray."
   (with-slots ((r radius) (cx pos-x) (cy pos-y)) circ
     (with-slots (x y) p
       (let* ((c (v cx cy))
-	     (l (v- p c)) ;; vector from point to center of circle
+	     (l (s* (v- p c) .5)) ;; half of vector from point to
+				  ;; center of circle
 	     (rr2 (v. l l))
 	     (rr (sqrt rr2))
 	     (s (/ r (* 2 rr)))
@@ -289,77 +290,81 @@ this ray."
     (when (< 72 rot)
       (setf rot 6.5))
     (let ((r 30)
-	  (rout 80)
-	  (pos '((80 40)
+	  (rout 192)
+	  (pos '((200 100)
 		 ;(80 14)
 		 ;(120 14)
 		 ))
-	  (off (list (list 80 130)
+	  (off (list (list 200 330)
 		     ;(list 120 (- 100 rot))
 		     ;(list 80 80)
 		     )))
      (with-slots (win-w win-h) parm
-       (let* ((n (closest-number-divisible-by-n 
-		  4 256 #+nil (ceiling (* (sqrt 2) (max win-h win-w)))))
-	      (data (make-array (list n n)
+      #+nil
+      (let* ((n (closest-number-divisible-by-n 
+		 4 256 #+nil (ceiling (* (sqrt 2) (max win-h win-w)))))
+	     (data (make-array (list n n)
 			       :element-type '(unsigned-byte 8)
 			       :initial-element 0))
-	      (tex (make-instance 'texture :data data :filter :nearest)))
-	 (paint (make-instance 'disk :pos-x 100 :pos-y 100 :radius 20) 
-		tex 
-		200)
-	 (loop for i below n by 3 do
-	   (setf (aref data (floor n 2) i) 255
-		 (aref data i (floor n 2)) 255))
-	 (with-pushed-matrix
-;	   (scale 1 1 1)
-	 ;  (translate .0 .6 0)
-;	   (translate (* .01 (random 99)) (* .01 (random 99)) 0)
-	   (translate (floor win-w 2)
-		      (floor win-h 4) 0)
-	   (rotate 0 0 0 1)
-	   (translate (- (floor n 2)) (- (floor n 2)) 0)
+	     (tex (make-instance 'texture :data data :filter :nearest)))
+	(paint (make-instance 'disk :pos-x 100 :pos-y 100 :radius 20) 
+	       tex 
+	       200)
+	(loop for i below n by 3 do
+	     (setf		       ; (aref data (floor n 2) i) 255
+	      (aref data i (if (evenp i)
+			       (floor n 2)
+			       (floor (+ (* 10 (1- (random 2.1))) (floor n 2))))) 255))
+	(with-pushed-matrix
+					;	   (scale 1 1 1)
+					;  (translate .0 .6 0)
+					;	   (translate (* .01 (random 99)) (* .01 (random 99)) 0)
+	  (translate (floor win-w 2)
+		     (floor win-h 4) 0)
+	  (rotate 0 0 0 1)
+	  (translate (- (floor n 2)) (- (floor n 2)) 0)
 	  (draw tex)))
+      (progn
        (color 0 1 0) (draw-circles r pos)
        (color 1 0 0) (draw-circles rout off)
-       (let ((z 40)
+       (let ((z 100)
 	     (h0 120))
 	 (color 1 1 0) (draw-tangents z r pos rout off)
 	 #+nil (dolist (c pos)
-	   (destructuring-bind (x y) c
-	    (handler-case
-		(multiple-value-bind (u v)
-		    (intersect (make-instance 'ray :direction (v 1.0)
-					      :start (v 0.0 z))
-			       (make-instance 'circle :radius r
-					      :pos-x x :pos-y y))
-		  (loop with n = 17 for i upto n do
-		       (let ((p (v+ u (s* (v- v u) (/ i n)))))
-			 (dolist (c off)
-			   (destructuring-bind (x y) c
-			     (multiple-value-bind (lo ro)  
-				 (tangent-touch
-				  (make-instance 'circle :radius rout
-						 :pos-x x :pos-y y)
-				  p)
-			       (loop with nj = 17 for j upto nj do
-				    (let ((q (v+ lo (s* (v- lo ro) (/ j nj)))))
-				      (draw (v (x p) 
-					       (+ h0 (* .4 180 (/ pi) (angle q p))))))))))))
-		  
-		  (color 1 1 1)
-	     
-		  (let ((max-angle (* 180 (/ pi) (asin (/ 1.47 1.52))))) 
-		    (loop for angle in (list 0 90 180 
-					     (+ 90 max-angle)
-					     (- 90 max-angle))
-			 do
-			 (let ((h (+ h0 (* .4 angle))))
-			   (draw (make-line (v 0 h)
-					    (v win-w h)))))))
-	      
-	      (no-solution ())
-	      (one-solution ())))))))))
+		 (destructuring-bind (x y) c
+		   (handler-case
+		       (multiple-value-bind (u v)
+			   (intersect (make-instance 'ray :direction (v 1.0)
+						     :start (v 0.0 z))
+				      (make-instance 'circle :radius r
+						     :pos-x x :pos-y y))
+			 (loop with n = 17 for i upto n do
+			      (let ((p (v+ u (s* (v- v u) (/ i n)))))
+				(dolist (c off)
+				  (destructuring-bind (x y) c
+				    (multiple-value-bind (lo ro)  
+					(tangent-touch
+					 (make-instance 'circle :radius rout
+							:pos-x x :pos-y y)
+					 p)
+				      (loop with nj = 17 for j upto nj do
+					   (let ((q (v+ lo (s* (v- lo ro) (/ j nj)))))
+					     (draw (v (x p) 
+						      (+ h0 (* .4 180 (/ pi) (angle q p))))))))))))
+			 
+			 (color 1 1 1)
+			 
+			 (let ((max-angle (* 180 (/ pi) (asin (/ 1.47 1.52))))) 
+			   (loop for angle in (list 0 90 180 
+						    (+ 90 max-angle)
+						    (- 90 max-angle))
+			      do
+				(let ((h (+ h0 (* .4 angle))))
+				  (draw (make-line (v 0 h)
+						   (v win-w h)))))))
+		     
+		     (no-solution ())
+		     (one-solution ()))))))))))
 
 (defun draw-tangents (z r pos rout off) 
   (dolist (c pos)
