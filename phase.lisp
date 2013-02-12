@@ -182,8 +182,7 @@ this ray."
 	 (v+ c (v+ (s* (normalize l) ix)
 		   (s* (perpendicular l) iy)))
 	 (v+ c (v+ (s* (normalize l) ix)
-		   (s* (perpendicular l) (- iy))))
-	 rr)))))
+		   (s* (perpendicular l) (- iy)))))))))
 
 #+nil
 (tangent-touch (make-instance 'circle :radius 7. :pos-x 10. :pos-y 0.)
@@ -284,20 +283,20 @@ this ray."
     (setup-screen)
     (color 1 1 1)
 
-    (incf rot .5)
+    (incf rot 4)
     (when (< rot 6)
       (setf rot 6.5))
-    (when (< 72 rot)
+    (when (< 79 rot)
       (setf rot 6.5))
-    (let ((r 30)
-	  (rout 192)
-	  (pos '((200 100)
-		 ;(80 14)
-		 ;(120 14)
+    (let ((r 12)
+	  (rout 12)
+	  (pos '((20 14)
+		 (80 14)
+		 (120 14)
 		 ))
-	  (off (list (list 200 330)
-		     ;(list 120 (- 100 rot))
-		     ;(list 80 80)
+	  (off (list (list 20 100)
+		     (list 120 40)
+		     (list 80 80)
 		     )))
      (with-slots (win-w win-h) parm
       #+nil
@@ -327,10 +326,10 @@ this ray."
       (progn
        (color 0 1 0) (draw-circles r pos)
        (color 1 0 0) (draw-circles rout off)
-       (let ((z 100)
-	     (h0 120))
+       (let ((z 14)
+	     (h0 300))
 	 (color 1 1 0) (draw-tangents z r pos rout off)
-	 #+nil (dolist (c pos)
+	  (dolist (c pos)
 		 (destructuring-bind (x y) c
 		   (handler-case
 		       (multiple-value-bind (u v)
@@ -349,17 +348,20 @@ this ray."
 					 p)
 				      (loop with nj = 17 for j upto nj do
 					   (let ((q (v+ lo (s* (v- lo ro) (/ j nj)))))
-					     (draw (v (x p) 
-						      (+ h0 (* .4 180 (/ pi) (angle q p))))))))))))
+					     (handler-case
+						 (draw (v (x p) 
+							  (+ h0 (* 180 (/ pi) (angle q p)
+								   ))))
+					       (simple-type-error ())
+					       (type-error ())
+					       (opengl-error ())))))))))
 			 
 			 (color 1 1 1)
 			 
 			 (let ((max-angle (* 180 (/ pi) (asin (/ 1.47 1.52))))) 
-			   (loop for angle in (list 0 90 180 
-						    (+ 90 max-angle)
-						    (- 90 max-angle))
+			   (loop for angle in (list 0 90 180)
 			      do
-				(let ((h (+ h0 (* .4 angle))))
+				(let ((h (+ h0 (*  angle))))
 				  (draw (make-line (v 0 h)
 						   (v win-w h)))))))
 		     
@@ -379,19 +381,19 @@ this ray."
 	       (let ((p (v+ left (s* (v- right left) (/ i n)))))
 		(dolist (c off)
 		  (destructuring-bind (x y) c
-		    (multiple-value-bind (a b r)
-			(tangent-touch
-			 (make-instance 'circle :radius rout
-					:pos-x x :pos-y y)
-			 p)
-		      (draw (make-instance 'circle 
-					   :radius r
-					   :pos-x (x p)
-					   :pos-y (y p)))
-		      (dolist (q (list a b))
-			(draw (make-line p q)))))))))
+		    (handler-case 
+			(multiple-value-bind (a b)
+			 (tangent-touch
+			  (make-instance 'circle :radius rout
+					 :pos-x x :pos-y y)
+			  p)
+			  (dolist (q (list a b))
+			    (draw (make-line p q))))
+		      (type-error ())
+		      (opengl-error ())))))))
 	 (no-solution ())
-	 (one-solution ())))))
+	 (one-solution ())
+	 ))))
 
 (defmethod make-line ((u vec2) (v vec2))
   (make-instance 'line :target v :start u))
