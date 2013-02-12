@@ -288,17 +288,19 @@ this ray."
       (setf rot 6.5))
     (when (< 79 rot)
       (setf rot 6.5))
-    (let ((r 12)
-	  (rout 12)
+    (let ((r 9)
+	  (rout 21)
 	  (pos '((20 14)
 		 (80 14)
 		 (120 14)
 		 ))
-	  (off (list (list 20 100)
+	  (off (list (list 20 (- 100 rot))
 		     (list 120 40)
 		     (list 80 80)
 		     )))
      (with-slots (win-w win-h) parm
+       (enable :blend)
+       (blend-func :src-alpha :one)
       #+nil
       (let* ((n (closest-number-divisible-by-n 
 		 4 256 #+nil (ceiling (* (sqrt 2) (max win-h win-w)))))
@@ -323,50 +325,66 @@ this ray."
 	  (rotate 0 0 0 1)
 	  (translate (- (floor n 2)) (- (floor n 2)) 0)
 	  (draw tex)))
-      (progn
-       (color 0 1 0) (draw-circles r pos)
-       (color 1 0 0) (draw-circles rout off)
-       (let ((z 14)
-	     (h0 300))
-	 (color 1 1 0) (draw-tangents z r pos rout off)
-	  (dolist (c pos)
-		 (destructuring-bind (x y) c
-		   (handler-case
-		       (multiple-value-bind (u v)
-			   (intersect (make-instance 'ray :direction (v 1.0)
-						     :start (v 0.0 z))
-				      (make-instance 'circle :radius r
-						     :pos-x x :pos-y y))
-			 (loop with n = 17 for i upto n do
-			      (let ((p (v+ u (s* (v- v u) (/ i n)))))
-				(dolist (c off)
-				  (destructuring-bind (x y) c
-				    (multiple-value-bind (lo ro)  
-					(tangent-touch
-					 (make-instance 'circle :radius rout
-							:pos-x x :pos-y y)
-					 p)
-				      (loop with nj = 17 for j upto nj do
-					   (let ((q (v+ lo (s* (v- lo ro) (/ j nj)))))
-					     (handler-case
-						 (draw (v (x p) 
-							  (+ h0 (* 180 (/ pi) (angle q p)
-								   ))))
-					       (simple-type-error ())
-					       (type-error ())
-					       (opengl-error ())))))))))
+      (with-pushed-matrix
+	(scale 3 3 1)
+	(progn
+	  (color 0 1 0) (draw-circles r pos)
+	 (color 1 0 0) (draw-circles rout off)
+	 (point-size 2.7)
+	 (line-width 2)
+	 (let ((z 14)
+	       (h0 300))
+	   (color 1 1 0) (draw-tangents z r pos rout off)
+	   (loop for c in pos and target from 0 do
+		(destructuring-bind (x y) c
+		  (handler-case
+		      (multiple-value-bind (u v)
+			  (intersect (make-instance 'ray :direction (v 1.0)
+						    :start (v 0.0 z))
+				     (make-instance 'circle :radius r
+						    :pos-x x :pos-y y))
+			(loop with n = 17 for i upto n do
+			     (let ((p (v+ u (s* (v- v u) (/ i n)))))
+			       #+nil
+			       (let ((v (/ (x p) 500))) ;; color based on x position
+				 (color 0 v 0 1))
+				
+			       (color (- 1 (/ target 3)) (/ target 3) 0 .09) ;; color based on bead number
+			       (dolist (c off)
+				 (destructuring-bind (x y) c
+				   (multiple-value-bind (lo ro)  
+				       (tangent-touch
+					(make-instance 'circle :radius rout
+						       :pos-x x :pos-y y)
+					p)
+				      
+				     (loop with nj = 18 for j upto nj do
+					  (let ((q (v+ lo (s* (v- lo ro) (/ j nj)))))
+					    (handler-case
+						 
+						#+nil
+					      (draw (v (x p)
+							 (+ h0 (* 180 (/ pi) (angle q p)
+								  ))))
+					      (draw (let ((h (+ h0 (* 180 (/ pi) (angle q p)
+								      )))
+							  (tx (+ 30 (* 12 target))))
+						      (make-line (v tx h) (v (+ 10 tx) h))))
+					      (simple-type-error ())
+					      (type-error ())
+					      (opengl-error ())))))))))
 			 
-			 (color 1 1 1)
+			(color 1 1 1)
 			 
-			 (let ((max-angle (* 180 (/ pi) (asin (/ 1.47 1.52))))) 
-			   (loop for angle in (list 0 90 180)
-			      do
-				(let ((h (+ h0 (*  angle))))
-				  (draw (make-line (v 0 h)
-						   (v win-w h)))))))
+			(let ((max-angle (* 180 (/ pi) (asin (/ 1.47 1.52))))) 
+			  (loop for angle in (list 0 90 180 (+ 90 max-angle) (- 90 max-angle))
+			     do
+			       (let ((h (+ h0 (*  angle))))
+				 (draw (make-line (v 0 h)
+						  (v win-w h)))))))
 		     
-		     (no-solution ())
-		     (one-solution ()))))))))))
+		    (no-solution ())
+		    (one-solution ())))))))))))
 
 (defun draw-tangents (z r pos rout off) 
   (dolist (c pos)
@@ -383,14 +401,16 @@ this ray."
 		  (destructuring-bind (x y) c
 		    (handler-case 
 			(multiple-value-bind (a b)
-			 (tangent-touch
-			  (make-instance 'circle :radius rout
-					 :pos-x x :pos-y y)
-			  p)
+			    (tangent-touch
+			     (make-instance 'circle :radius rout
+					    :pos-x x :pos-y y)
+			     p)
 			  (dolist (q (list a b))
-			    (draw (make-line p q))))
+			    (handler-case
+				(draw (make-line p q))
+			      (opengl-error ()))))
 		      (type-error ())
-		      (opengl-error ())))))))
+		      ))))))
 	 (no-solution ())
 	 (one-solution ())
 	 ))))
